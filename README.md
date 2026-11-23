@@ -1,42 +1,47 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# Tiny Tapeout Verilog Project Template
+# Transmisor IR-UWB 16-PPM con codificador convolucional — Tiny Tapeout GF26c
 
-- [Read the documentation for project](docs/info.md)
+Proyecto para la convocatoria **IEEE Open Silicon** (Tiny Tapeout, shuttle GlobalFoundries GF180, TTGF26c).
+Es la adaptación a Tiny Tapeout del transmisor `PPM_16` v5 enviado a Silicluster v3, con un pin nuevo de modo (`ui[7]`).
 
-## What is Tiny Tapeout?
+- Hoja de datos del proyecto: [docs/info.md](docs/info.md)
+- Top del tile: `tt_um_ch33st3r_ppm16` (`src/project.v`), 1x1, reloj de 10 MHz.
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+## Archivos
 
-To learn more and get started, visit https://tinytapeout.com.
+| Archivo | Contenido |
+|---|---|
+| `src/project.v` | Envoltura de Tiny Tapeout: pines `ui/uo/uio`, `rst_n` (activo en bajo) → `RST` |
+| `src/PPM_16.v` | Top del núcleo: PN + PSModule + mux SrcExt + codificador + decoder + P2S, y selector `MODO` |
+| `src/PN_Module.v`, `ShiftRegister.v`, `aZero.v` | LFSR de 24 bits (tomas 0, 1, 2, 7) |
+| `src/PSModule.v`, `EventCounter4.v`, `registro.v`, `ProbaSelec.v` | Fuente con probabilidad seleccionable y `Y4CLK` |
+| `src/cc_Module_2.v`, `Register3Bits.v` | Codificador convolucional (circuitos 1 a 4) |
+| `src/decoder4_16.v`, `P2SRegister.v` | Símbolo de 16 ranuras y salida serial |
+| `test/test.py` | Testbench de cocotb con modelo de referencia ciclo a ciclo (RTL y GL) |
 
-## Set up your Verilog project
+Con varios archivos, cada `.v` va en `src/` y se lista uno por renglón en `source_files` de `info.yaml` y en `PROJECT_SOURCES` de `test/Makefile`.
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+## Pines
 
-The GitHub action will automatically build the ASIC files using [LibreLane](https://www.zerotoasiccourse.com/terminology/librelane/).
+| Pin | Señal | | Pin | Señal |
+|---|---|---|---|---|
+| ui[0] | BitExt | | uo[3:0] | oArrBits[3:0] |
+| ui[1] | SrcExt | | uo[4] | oSLF[0] (z2) |
+| ui[3:2] | SelP[1:0] | | uo[5] | oSLF[1] (z1) |
+| ui[4] | S | | uo[6] | tx |
+| ui[6:5] | OPselector[1:0] | | uo[7] | tx_done |
+| ui[7] | MODO | | uio[0] | Bitpro (salida) |
+| | | | uio[1] | Y4CLK (salida) |
 
-## Enable GitHub actions to build the results page
+`MODO = 0`: el codificador avanza con Y4CLK (1 de cada 4 ciclos), igual que la v5.
+`MODO = 1`: avanza con tx_done (1 de cada 16 ciclos), así que 1 bit produce 1 símbolo.
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+## Simulación local
 
-## Resources
+```sh
+cd test
+make -B            # RTL
+```
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
-
-## What next?
-
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
-  - Bluesky [@tinytapeout.com](https://bsky.app/profile/tinytapeout.com)
+Debe terminar con `TESTS=4 PASS=4 FAIL=0`. Con `MODO = 0` el test reproduce las ranuras de la simulación de la v5 (C1: 14, 0, 6, 0; C2: 4, 7, 5, 7; C3: 10, 1, 3, 13; C4: 0, 0, 0, 0; C3 sin retroalimentación: 1, 5, 4, 4).
